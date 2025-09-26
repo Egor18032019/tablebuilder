@@ -1,16 +1,11 @@
 package com.tablebuilder.demo.service;
 
-import com.tablebuilder.demo.store.TableColumn;
-import com.tablebuilder.demo.store.TableColumnRepository;
-import com.tablebuilder.demo.store.UploadedTable;
-import com.tablebuilder.demo.store.UploadedTableRepository;
-import com.tablebuilder.demo.utils.NameUtils;
+import com.tablebuilder.demo.store.*;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class MetadataService {
@@ -20,6 +15,9 @@ public class MetadataService {
 
     @Autowired
     private TableColumnRepository tableColumnRepository;
+
+    @Autowired
+    private TableListRepository tableListRepository;
 
     /**
      * Сохраняем метаданные таблицы
@@ -31,7 +29,8 @@ public class MetadataService {
     public void saveTableMetadata(
             UploadedTable savedTable,
             List<String> originalColumnNames,
-            List<String> internalColumnNames) {
+            List<String> internalColumnNames,
+            String listName) {
 
         for (int i = 0; i < originalColumnNames.size(); i++) {
             TableColumn col = new TableColumn();
@@ -39,6 +38,7 @@ public class MetadataService {
             col.setInternalName(internalColumnNames.get(i));
             col.setDisplayName(originalColumnNames.get(i));
             col.setOriginalIndex(i);
+            col.setListName(listName);
             tableColumnRepository.save(col);
         }
     }
@@ -80,4 +80,12 @@ public class MetadataService {
 
     }
 
+    public void saveTableList(UploadedTable savedTable, String tableName,String originalListName) {
+        TableList tableList = new TableList();
+        tableList.setListName(tableName);
+        tableList.setTable(savedTable);
+        tableList.setOriginalListName(originalListName);
+        tableListRepository.save(tableList);
+
+    }
 }

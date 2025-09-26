@@ -8,8 +8,7 @@ import lombok.Data;
  * то есть в Excel столбец = "№ мест" а в БД столбец = no_mest
  */
 @Entity
-@Table(name = "table_columns",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"table_id", "internal_name"}))
+@Table(name = "table_columns")
 @Data
 public class TableColumn {
     @Id
@@ -21,10 +20,13 @@ public class TableColumn {
     private UploadedTable table;
 
     @Column(nullable = false, length = 63)
-    private String internalName; // fio
+    private String internalName;
 
     @Column(nullable = false)
-    private String displayName; // ФИО
+    private String displayName;
 
-    private int originalIndex; // порядок в Excel (0, 1, 2...)
+    private int originalIndex;
+
+    @Column(nullable = false, length = 63)
+    private String listName;
 }

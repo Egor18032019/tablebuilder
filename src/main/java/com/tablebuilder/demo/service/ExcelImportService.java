@@ -12,7 +12,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -54,6 +53,8 @@ public class ExcelImportService {
 
                     // === Имя таблицы: файл__лист ===
                     String tableName = NameUtils.toValidSqlName(internalTableName + "__" + sheetName);
+                    metadataService.saveTableList(savedTable, tableName, sheetName);
+
                     // Определяем количество столбцов
                     int maxColumns = 0;
                     boolean firstRowFound = false;
@@ -116,7 +117,8 @@ public class ExcelImportService {
                     metadataService.saveTableMetadata(
                             savedTable,
                             originalColumnNames,
-                            columnNames
+                            columnNames,
+                            tableName
                     );
                 }
 
