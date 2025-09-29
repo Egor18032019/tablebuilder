@@ -4,6 +4,7 @@ package com.tablebuilder.demo.service;
 import com.tablebuilder.demo.model.ExcelImportResult;
 
 import com.tablebuilder.demo.store.UploadedTable;
+import com.tablebuilder.demo.utils.ColumnType;
 import com.tablebuilder.demo.utils.NameUtils;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -14,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ExcelImportService {
@@ -57,7 +59,9 @@ public class ExcelImportService {
 
                     // Определяем количество столбцов
                     int maxColumns = 0;
+                    int firsRowSaveValue = 1;
                     boolean firstRowFound = false;
+                    int maxLengthRow = 2;
                     for (int i = 0; i <= sheet.getLastRowNum(); i++) {
                         Row row = sheet.getRow(i);
                         if (row != null) {
@@ -67,14 +71,20 @@ public class ExcelImportService {
                             }
                             int lastCell = row.getLastCellNum();
                             if (lastCell > maxColumns) {
+                                if (i > 2) {
+                                    maxLengthRow = i;
+                                }
                                 maxColumns = lastCell;
+                                firsRowSaveValue = maxColumns;
+
                             }
                         }
                     }
                     if (maxColumns == 0) {
                         continue;
                     }
-                    System.out.println(maxColumns);
+
+                    System.out.println("firsRowSaveValue - " + firsRowSaveValue);
 // Теперь maxColumns — реальная ширина таблицы
                     // Парсим заголовки
                     List<String> originalColumnNames = new ArrayList<>();
@@ -89,24 +99,39 @@ public class ExcelImportService {
                         columnNames.add(colName);
                     }
 
+
+                    // Собираем первые 10 строк как пример для анализа типов
+                    List<Map<String, Object>> sampleData = new ArrayList<>();
+                    int sampleSize = Math.min(10, sheet.getLastRowNum());
+                    System.out.println(sampleSize + " - sampleSize");
+                    for (int r = maxLengthRow; r <= maxLengthRow + sampleSize; r++) {
+                        Row row = sheet.getRow(r);
+                        if (row == null) continue;
+
+                        Map<String, Object> rowData = new java.util.HashMap<>();
+                        for (int c = 0; c < columnNames.size(); c++) {
+                            Cell cell = row.getCell(c, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                            rowData.put(columnNames.get(c), getCellValue(cell));
+                        }
+                        sampleData.add(rowData);
+                    }
                     // Создаём таблицу
-                    dynamicTableService.ensureTableExists(tableName, columnNames);
+                    Map<Object, ColumnType> columnTypes = dynamicTableService.ensureTableExists(tableName, originalColumnNames, columnNames, sampleData);
 
                     // Вставляем данные
                     int rowsImported = 0;
-                    for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                    for (int i = firsRowSaveValue; i <= sheet.getLastRowNum(); i++) {
                         Row row = sheet.getRow(i);
                         if (row == null) continue;
 
                         List<Object> values = new ArrayList<>();
                         for (int j = 0; j < columnNames.size(); j++) {
                             Cell cell = row.getCell(j);
-                            String cellValue = getCellValueAsString(cell);
-
+                            Object cellValue = getCellValue(cell);
                             values.add(cellValue);
                         }
 
-                        insertRow(tableName, columnNames, values);
+                        insertRow(tableName, columnNames, columnTypes, values);
                         rowsImported++;
                     }
 
@@ -140,7 +165,7 @@ public class ExcelImportService {
         }
     }
 
-    private String getCellValueAsString(Cell cell) {
+    private Object getCellValue(Cell cell) {
         if (cell == null) return "";
 //todo добавить стили
         switch (cell.getCellType()) {
@@ -149,18 +174,14 @@ public class ExcelImportService {
             }
             case NUMERIC -> {
                 if (DateUtil.isCellDateFormatted(cell)) {
-                    return cell.getDateCellValue().toString();
+                    return cell.getDateCellValue();
                 } else {
-                    double value = cell.getNumericCellValue();
-                    if (value == Math.floor(value)) {
-                        return String.valueOf((long) value);
-                    } else {
-                        return String.valueOf(value);
-                    }
+                    return cell.getNumericCellValue();
+
                 }
             }
             case BOOLEAN -> {
-                return String.valueOf(cell.getBooleanCellValue());
+                return cell.getBooleanCellValue();
             }
             case FORMULA -> {
                 return "=" + cell.getCellFormula();
@@ -187,5 +208,72 @@ public class ExcelImportService {
         String sql = cols + ph;
 
         jdbcTemplate.update(sql, values.toArray());
+    }
+
+    private void insertRow(String tableName, List<String> columnNames, Map<Object, ColumnType> columnTypes, List<Object> rawValues) {
+        StringBuilder columns = new StringBuilder("INSERT INTO " + tableName + " (");
+        StringBuilder placeholders = new StringBuilder(" VALUES (");
+
+        List<Object> convertedValues = new ArrayList<>();
+
+        for (int i = 0; i < columnNames.size(); i++) {
+            String colName = columnNames.get(i);
+            ColumnType colType = columnTypes.get(colName);
+            Object rawValue = rawValues.get(i);
+
+            columns.append(colName).append(", ");
+            placeholders.append("?, ");
+
+            // Конвертируем значение в правильный тип
+            Object convertedValue = convertValue(rawValue, colType);
+            convertedValues.add(convertedValue);
+        }
+
+        String cols = columns.substring(0, columns.length() - 2) + ")";
+        String ph = placeholders.substring(0, placeholders.length() - 2) + ")";
+        String sql = cols + ph;
+
+        jdbcTemplate.update(sql, convertedValues.toArray());
+    }
+
+    private Object convertValue(Object rawValue, ColumnType columnType) {
+        // Пустые значения → null
+        if (rawValue == null || rawValue.toString().trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            switch (columnType) {
+                case ColumnType.NUMBER:
+                    // Убираем пробелы, заменяем запятые на точки (для русских Excel)
+                    String numericStr = rawValue.toString().trim().replace(",", ".");
+                    return new java.math.BigDecimal(numericStr);
+
+                case ColumnType.DATE:
+                    // Поддерживаем несколько форматов
+                    String dateStr = rawValue.toString().trim();
+                    if (dateStr.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                        return java.sql.Date.valueOf(dateStr);
+                    } else if (dateStr.matches("\\d{2}\\.\\d{2}\\.\\d{4}")) {
+                        // dd.MM.yyyy → yyyy-MM-dd
+                        String[] parts = dateStr.split("\\.");
+                        String isoDate = parts[2] + "-" + parts[1] + "-" + parts[0];
+                        return java.sql.Date.valueOf(isoDate);
+                    }
+                    // Если не распознали — сохраняем как строку (или null)
+                    return null;
+
+                case ColumnType.BOOLEAN:
+                    String boolStr = rawValue.toString().trim().toLowerCase();
+                    return "true".equals(boolStr) || "1".equals(boolStr) || "да".equals(boolStr);
+
+                default:
+                    return rawValue; // STRING
+            }
+        } catch (Exception e) {
+            // Если не удалось распарсить — сохраняем как null
+            System.err.println("Conversion error for value '" + rawValue + "' to type " + columnType + ": " + e.getMessage());
+            return null;
+        }
     }
 }

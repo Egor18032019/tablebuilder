@@ -1,5 +1,6 @@
 package com.tablebuilder.demo.store;
 
+import aj.org.objectweb.asm.Type;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -14,4 +15,6 @@ public interface TableColumnRepository extends JpaRepository<TableColumn, Long> 
     boolean existsByTableIdAndInternalName(Long tableId, String internalColumnName);
 
     TableColumn findByTableIdAndInternalName(Long tableId, String internalColumnName);
+
+    TableColumn findByDisplayNameAndListName(String col, String listName);
 }

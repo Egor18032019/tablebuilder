@@ -5,6 +5,7 @@ import com.tablebuilder.demo.model.FileDataResponse;
 import com.tablebuilder.demo.model.RequestString;
 import com.tablebuilder.demo.model.TableRequest;
 import com.tablebuilder.demo.service.ExcelExportService;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,12 +20,9 @@ public class TableDataController {
     @Autowired
     private ExcelExportService excelExportService;
 
-    /**
-     * Возвращает данные таблицы с оригинальными именами столбцов.
-     *
-     * @param fileName - имя файла
-     * @return json
-     */
+
+    @Operation(summary = "Возвращает данные таблицы с оригинальными именами столбцов по имени файла - " +
+            "First.xlsx")
     @GetMapping("/{fileName}/data")
     public ResponseEntity<FileDataResponse> getFileDataOnPath(@PathVariable String fileName) {
         try {
@@ -37,13 +35,20 @@ public class TableDataController {
         }
     }
 
+    /**
+     * Возвращает данные таблицы с оригинальными именами столбцов
+     * и фильтрация и сортировка.
+     *
+     * @param request - имя файла и параметры фильтрации и сортировки.
+     * @return
+     */
+    @Operation(summary = "Возвращает данные таблицы с оригинальными именами столбцов и фильтрация и сортировка")
     @PostMapping("/file-data")
     public ResponseEntity<FileDataResponse> getFileData(@RequestBody TableRequest request) {
-        String fileName = request.getTableName();
+
         try {
-            // URL-декодируем имя файла (на случай %D0%A4%D0%B8%D0%BE...) на всякий случай
-            String decodedFileName = java.net.URLDecoder.decode(fileName, StandardCharsets.UTF_8);
-            FileDataResponse data = excelExportService.getFileData(decodedFileName);
+
+            FileDataResponse data = excelExportService.getFileData(request);
             return ResponseEntity.ok(data);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
