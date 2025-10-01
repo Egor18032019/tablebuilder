@@ -1,279 +1,258 @@
 package com.tablebuilder.demo.service;
 
 
+import com.tablebuilder.demo.model.CellDTO;
 import com.tablebuilder.demo.model.ExcelImportResult;
-
-import com.tablebuilder.demo.store.UploadedTable;
-import com.tablebuilder.demo.utils.ColumnType;
+import com.tablebuilder.demo.store.SheetTable;
+import com.tablebuilder.demo.store.TemplateCell;
+import com.tablebuilder.demo.store.TemplateCellRepository;
+import com.tablebuilder.demo.store.UploadedFileTable;
+import com.tablebuilder.demo.utils.CellDataType;
 import com.tablebuilder.demo.utils.NameUtils;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFCellStyle;
+import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class ExcelImportService {
 
     @Autowired
-    private DynamicTableService dynamicTableService;
-    @Autowired
     private MetadataService metadataService;
+
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private TemplateCellRepository templateCellRepository;
 
     public ExcelImportResult importExcel(MultipartFile file, String username) {
         try {
+            validateFile(file);
             String originalFilename = file.getOriginalFilename();
-            if (originalFilename == null) {
-                return new ExcelImportResult(false, 0, "", "Filename is null");
-            }
-
-            // Убираем расширение один раз
-            String baseFileName = originalFilename.replaceAll("\\.[^.]*$", "");
+            String baseFileName = extractBaseName(originalFilename);
             String internalTableName = NameUtils.toValidSqlName(baseFileName);
+
             try (Workbook workbook = new XSSFWorkbook(file.getInputStream())) {
-                int totalRowsImported = 0;
-                List<String> processedTables = new ArrayList<>();
-                UploadedTable savedTable = metadataService.saveUploadedTable(originalFilename, internalTableName, username);
-                // Проходим по всем листам
-                for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
-                    Sheet sheet = workbook.getSheetAt(sheetIndex);
-                    String sheetName = workbook.getSheetName(sheetIndex);
-
-                    // Пропускаем пустые листы
-                    if (sheet.getPhysicalNumberOfRows() < 1) {
-                        continue;
-                    }
-
-                    Row firstRow = sheet.getRow(0);
-
-                    // === Имя таблицы: файл__лист ===
-                    String tableName = NameUtils.toValidSqlName(internalTableName + "__" + sheetName);
-                    metadataService.saveTableList(savedTable, tableName, sheetName);
-
-                    // Определяем количество столбцов
-                    int maxColumns = 0;
-                    int firsRowSaveValue = 1;
-                    boolean firstRowFound = false;
-                    int maxLengthRow = 2;
-                    for (int i = 0; i <= sheet.getLastRowNum(); i++) {
-                        Row row = sheet.getRow(i);
-                        if (row != null) {
-                            if (!firstRowFound) {
-                                firstRow = row;
-                                firstRowFound = true;
-                            }
-                            int lastCell = row.getLastCellNum();
-                            if (lastCell > maxColumns) {
-                                if (i > 2) {
-                                    maxLengthRow = i;
-                                }
-                                maxColumns = lastCell;
-                                firsRowSaveValue = maxColumns;
-
-                            }
-                        }
-                    }
-                    if (maxColumns == 0) {
-                        continue;
-                    }
-
-                    System.out.println("firsRowSaveValue - " + firsRowSaveValue);
-// Теперь maxColumns — реальная ширина таблицы
-                    // Парсим заголовки
-                    List<String> originalColumnNames = new ArrayList<>();
-                    List<String> columnNames = new ArrayList<>();
-
-                    for (int i = 0; i < maxColumns; i++) {
-                        Cell cell = firstRow.getCell(i);
-                        String colNameBefore = (cell == null) ? "col_" + i : cell.getStringCellValue();
-                        String colName = NameUtils.toValidSqlName(colNameBefore);
-
-                        originalColumnNames.add(colNameBefore);
-                        columnNames.add(colName);
-                    }
-
-
-                    // Собираем первые 10 строк как пример для анализа типов
-                    List<Map<String, Object>> sampleData = new ArrayList<>();
-                    int sampleSize = Math.min(10, sheet.getLastRowNum());
-                    System.out.println(sampleSize + " - sampleSize");
-                    for (int r = maxLengthRow; r <= maxLengthRow + sampleSize; r++) {
-                        Row row = sheet.getRow(r);
-                        if (row == null) continue;
-
-                        Map<String, Object> rowData = new java.util.HashMap<>();
-                        for (int c = 0; c < columnNames.size(); c++) {
-                            Cell cell = row.getCell(c, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
-                            rowData.put(columnNames.get(c), getCellValue(cell));
-                        }
-                        sampleData.add(rowData);
-                    }
-                    // Создаём таблицу
-                    Map<Object, ColumnType> columnTypes = dynamicTableService.ensureTableExists(tableName, originalColumnNames, columnNames, sampleData);
-
-                    // Вставляем данные
-                    int rowsImported = 0;
-                    for (int i = firsRowSaveValue; i <= sheet.getLastRowNum(); i++) {
-                        Row row = sheet.getRow(i);
-                        if (row == null) continue;
-
-                        List<Object> values = new ArrayList<>();
-                        for (int j = 0; j < columnNames.size(); j++) {
-                            Cell cell = row.getCell(j);
-                            Object cellValue = getCellValue(cell);
-                            values.add(cellValue);
-                        }
-
-                        insertRow(tableName, columnNames, columnTypes, values);
-                        rowsImported++;
-                    }
-
-                    totalRowsImported += rowsImported;
-                    processedTables.add(tableName);
-
-                    // Сохраняем метаданные для этого листа
-                    metadataService.saveTableMetadata(
-                            savedTable,
-                            originalColumnNames,
-                            columnNames,
-                            tableName
-                    );
-                }
-
-                if (processedTables.isEmpty()) {
-                    return new ExcelImportResult(false, 0, originalFilename, "No valid sheets found");
-                }
-
-                return new ExcelImportResult(
-                        true,
-                        totalRowsImported,
-                        String.join(", ", processedTables),
-                        "Import successful. Tables: " + processedTables
-                );
+                return processWorkbook(workbook, originalFilename, internalTableName, username);
             }
-
         } catch (Exception e) {
             e.printStackTrace();
             return new ExcelImportResult(false, 0, "", "Error: " + e.getMessage());
         }
     }
 
-    private Object getCellValue(Cell cell) {
-        if (cell == null) return "";
-//todo добавить стили
+    // --- Вспомогательные методы ---
+
+    private void validateFile(MultipartFile file) {
+        if (file == null || file.getOriginalFilename() == null) {
+            throw new IllegalArgumentException("Filename is null");
+        }
+    }
+
+    private String extractBaseName(String filename) {
+        return filename.replaceAll("\\.[^.]*$", "");
+    }
+
+    private ExcelImportResult processWorkbook(Workbook workbook, String originalFilename,
+                                              String internalTableName, String username) {
+        UploadedFileTable savedTable = metadataService.saveUploadedTable(
+                originalFilename, internalTableName, username
+        );
+
+        int totalRowsImported = 0;
+        List<String> processedSheets = new ArrayList<>();
+
+        for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
+            Sheet sheet = workbook.getSheetAt(sheetIndex);
+            if (isSheetEmpty(sheet)) continue;
+
+            String sheetName = workbook.getSheetName(sheetIndex);
+            String tableName = NameUtils.toValidSqlName(internalTableName + "__" + sheetName);
+            SheetTable sheetTable = metadataService.saveSheetInTable(savedTable, tableName, sheetName);
+
+            List<TemplateCell> cellsToSave = processSheet(sheet, sheetTable, workbook);
+            if (!cellsToSave.isEmpty()) {
+                templateCellRepository.saveAll(cellsToSave);
+            }
+
+            totalRowsImported += sheet.getLastRowNum() + 1;
+            processedSheets.add(tableName);
+        }
+
+        if (processedSheets.isEmpty()) {
+            return new ExcelImportResult(false, 0, originalFilename, "No valid sheets found");
+        }
+
+        return new ExcelImportResult(
+                true,
+                totalRowsImported,
+                String.join(", ", processedSheets),
+                "Import successful. Sheets: " + processedSheets
+        );
+    }
+
+    private boolean isSheetEmpty(Sheet sheet) {
+        return sheet.getPhysicalNumberOfRows() < 1;
+    }
+
+    private List<TemplateCell> processSheet(Sheet sheet, SheetTable sheetTable, Workbook workbook) {
+        List<TemplateCell> cells = new ArrayList<>();
+        int lastRowNum = sheet.getLastRowNum();
+
+        for (int rowIndex = 0; rowIndex <= lastRowNum; rowIndex++) {
+            Row row = sheet.getRow(rowIndex);
+            if (row == null) continue;
+
+            int lastCellNum = row.getLastCellNum();
+            for (int cellIndex = 0; cellIndex < lastCellNum; cellIndex++) {
+                Cell cell = row.getCell(cellIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
+                if (cell == null || cell.getCellType() == CellType.BLANK) continue;
+
+                CellDTO cellData = getCellForSave(cell, workbook);
+                if (cellData == null) continue;
+
+                TemplateCell templateCell = buildTemplateCell(cellData, sheetTable, rowIndex, cellIndex);
+                cells.add(templateCell);
+            }
+        }
+        return cells;
+    }
+
+    private TemplateCell buildTemplateCell(CellDTO cellData, SheetTable sheetTable,
+                                           int rowIndex, int cellIndex) {
+        TemplateCell cell = new TemplateCell();
+        cell.setSheet(sheetTable);
+        cell.setRowIndex(rowIndex);
+        cell.setCellIndex(cellIndex);
+        cell.setDataType(cellData.getDataType());
+        cell.setValue(cellData.getValue());
+        cell.setFormula(cellData.getFormula());
+        cell.setStyle(cellData.getStyle().toString());
+        cell.setDescription(cellData.getDescription());
+        return cell;
+    }
+
+    // --- Обработка стилей ячейки ---
+
+    private CellDTO getCellForSave(Cell cell, Workbook workbook) {
+        CellDTO cellData = new CellDTO();
+        cellData.setFormula("");
+
+        // Определяем тип данных и значение
+        determineCellValueAndType(cell, cellData);
+
+        // Собираем стили
+        Map<String, Object> styles = extractCellStyles(cell, workbook);
+        cellData.setStyle(styles.toString());
+
+        // Комментарий
+        cellData.setDescription(getCellComment(cell));
+
+        return cellData;
+    }
+
+    private void determineCellValueAndType(Cell cell, CellDTO cellData) {
         switch (cell.getCellType()) {
+            case BLANK -> {
+                // Пропускаем пустые ячейки
+            }
             case STRING -> {
-                return cell.getStringCellValue();
+                cellData.setDataType(CellDataType.STRING);
+                cellData.setValue(cell.getStringCellValue());
             }
             case NUMERIC -> {
                 if (DateUtil.isCellDateFormatted(cell)) {
-                    return cell.getDateCellValue();
+                    cellData.setDataType(CellDataType.DATE);
+                    cellData.setValue(cell.getDateCellValue().toString());
                 } else {
-                    return cell.getNumericCellValue();
-
+                    cellData.setDataType(CellDataType.NUMBER);
+                    cellData.setValue(String.valueOf(cell.getNumericCellValue()));
                 }
             }
             case BOOLEAN -> {
-                return cell.getBooleanCellValue();
+                cellData.setDataType(CellDataType.BOOLEAN);
+                cellData.setValue(String.valueOf(cell.getBooleanCellValue()));
             }
             case FORMULA -> {
-                return "=" + cell.getCellFormula();
+                cellData.setDataType(CellDataType.FORMULA);
+                // Пытаемся получить вычисленное значение
+                try {
+                    FormulaEvaluator evaluator = cell.getSheet().getWorkbook().getCreationHelper().createFormulaEvaluator();
+                    CellValue evaluated = evaluator.evaluate(cell);
+                    if (evaluated != null) {
+                        if (DateUtil.isCellDateFormatted(cell)) {
+                            cellData.setValue(cell.getDateCellValue().toString());
+                        } else if (evaluated.getCellType() == CellType.NUMERIC) {
+                            cellData.setValue(String.valueOf(evaluated.getNumberValue()));
+                        } else if (evaluated.getCellType() == CellType.STRING) {
+                            cellData.setValue(evaluated.getStringValue());
+                        } else if (evaluated.getCellType() == CellType.BOOLEAN) {
+                            cellData.setValue(String.valueOf(evaluated.getBooleanValue()));
+                        }
+                    }
+                } catch (Exception e) {
+                    // Если не удалось вычислить — сохраняем как есть
+                }
+                cellData.setFormula(cell.getCellFormula());
             }
             default -> {
-                return "";
+                cellData.setDataType(CellDataType.STRING);
+                cellData.setValue(cell.toString());
             }
         }
     }
 
-    private void insertRow(String tableName, List<String> columnNames, List<Object> values) {
-        StringBuilder columns = new StringBuilder("INSERT INTO " + tableName + " (");
-        StringBuilder placeholders = new StringBuilder(" VALUES (");
+    private Map<String, Object> extractCellStyles(Cell cell, Workbook workbook) {
+        Map<String, Object> styles = new HashMap<>();
+        CellStyle cellStyle = cell.getCellStyle();
+        Font font = workbook.getFontAt(cellStyle.getFontIndex());
 
-        for (String col : columnNames) {
-            columns.append(col).append(", ");
-            placeholders.append("?, ");
-        }
+        // Шрифт
+        List<String> fontStyles = new ArrayList<>();
+        if (font.getBold()) fontStyles.add("bold");
+        if (font.getItalic()) fontStyles.add("italic");
+        if (font.getStrikeout()) fontStyles.add("strikethrough");
+        styles.put("font-styles", fontStyles.isEmpty() ? List.of("normal") : fontStyles);
+        styles.put("font-size", font.getFontHeightInPoints());
+        styles.put("font-color", extractFontColor(font));
 
-        // Убираем последние ", "
-        String cols = columns.substring(0, columns.length() - 2) + ")";
-        String ph = placeholders.substring(0, placeholders.length() - 2) + ")";
+        // Фон
+        styles.put("background-color", extractBackgroundColor(cellStyle, workbook));
 
-        String sql = cols + ph;
+        // Выравнивание
+        styles.put("text-align", cellStyle.getAlignment().name().toLowerCase());
 
-        jdbcTemplate.update(sql, values.toArray());
+        return styles;
     }
 
-    private void insertRow(String tableName, List<String> columnNames, Map<Object, ColumnType> columnTypes, List<Object> rawValues) {
-        StringBuilder columns = new StringBuilder("INSERT INTO " + tableName + " (");
-        StringBuilder placeholders = new StringBuilder(" VALUES (");
-
-        List<Object> convertedValues = new ArrayList<>();
-
-        for (int i = 0; i < columnNames.size(); i++) {
-            String colName = columnNames.get(i);
-            ColumnType colType = columnTypes.get(colName);
-            Object rawValue = rawValues.get(i);
-
-            columns.append(colName).append(", ");
-            placeholders.append("?, ");
-
-            // Конвертируем значение в правильный тип
-            Object convertedValue = convertValue(rawValue, colType);
-            convertedValues.add(convertedValue);
-        }
-
-        String cols = columns.substring(0, columns.length() - 2) + ")";
-        String ph = placeholders.substring(0, placeholders.length() - 2) + ")";
-        String sql = cols + ph;
-
-        jdbcTemplate.update(sql, convertedValues.toArray());
+    private String extractFontColor(Font font) {
+        // Для простоты — возвращаем индекс (можно улучшить до HEX)
+        return String.valueOf(font.getColor());
     }
 
-    private Object convertValue(Object rawValue, ColumnType columnType) {
-        // Пустые значения → null
-        if (rawValue == null || rawValue.toString().trim().isEmpty()) {
-            return null;
-        }
-
-        try {
-            switch (columnType) {
-                case ColumnType.NUMBER:
-                    // Убираем пробелы, заменяем запятые на точки (для русских Excel)
-                    String numericStr = rawValue.toString().trim().replace(",", ".");
-                    return new java.math.BigDecimal(numericStr);
-
-                case ColumnType.DATE:
-                    // Поддерживаем несколько форматов
-                    String dateStr = rawValue.toString().trim();
-                    if (dateStr.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                        return java.sql.Date.valueOf(dateStr);
-                    } else if (dateStr.matches("\\d{2}\\.\\d{2}\\.\\d{4}")) {
-                        // dd.MM.yyyy → yyyy-MM-dd
-                        String[] parts = dateStr.split("\\.");
-                        String isoDate = parts[2] + "-" + parts[1] + "-" + parts[0];
-                        return java.sql.Date.valueOf(isoDate);
-                    }
-                    // Если не распознали — сохраняем как строку (или null)
-                    return null;
-
-                case ColumnType.BOOLEAN:
-                    String boolStr = rawValue.toString().trim().toLowerCase();
-                    return "true".equals(boolStr) || "1".equals(boolStr) || "да".equals(boolStr);
-
-                default:
-                    return rawValue; // STRING
+    private String extractBackgroundColor(CellStyle cellStyle, Workbook workbook) {
+        // Попытка получить HEX-цвет для .xlsx
+        if (workbook instanceof XSSFWorkbook && cellStyle instanceof XSSFCellStyle) {
+            XSSFColor bgColor = ((XSSFCellStyle) cellStyle).getFillBackgroundColorColor();
+            if (bgColor != null && bgColor.getRGB() != null) {
+                byte[] rgb = bgColor.getRGB();
+                return String.format("#%02X%02X%02X",
+                        rgb[0] & 0xFF,
+                        rgb[1] & 0xFF,
+                        rgb[2] & 0xFF
+                );
             }
-        } catch (Exception e) {
-            // Если не удалось распарсить — сохраняем как null
-            System.err.println("Conversion error for value '" + rawValue + "' to type " + columnType + ": " + e.getMessage());
-            return null;
         }
+        // Fallback: возвращаем индекс
+        return String.valueOf(cellStyle.getFillBackgroundColor());
+    }
+
+    private String getCellComment(Cell cell) {
+        if (cell.getCellComment() == null) return "";
+
+        return cell.getCellComment().toString();
     }
 }

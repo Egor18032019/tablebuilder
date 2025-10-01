@@ -1,11 +1,8 @@
 package com.tablebuilder.demo.service;
 
 import com.tablebuilder.demo.store.*;
-import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 public class MetadataService {
@@ -14,49 +11,35 @@ public class MetadataService {
     private UploadedTableRepository uploadedTableRepository;
 
     @Autowired
-    private TableColumnRepository tableColumnRepository;
+    private SheetTableRepository sheetTableRepository;
 
-    @Autowired
-    private TableListRepository tableListRepository;
+//    /**
+//     * Сохраняем метаданные таблицы
+//     *
+//     * @param originalColumnNames - имена столбцов в файле
+//     * @param internalColumnNames - имена столбцов в БД
+//     */
+//    @Transactional
+//    public void saveTableMetadata(
+//            UploadedFileTable savedTable,
+//            List<String> originalColumnNames,
+//            List<String> internalColumnNames,
+//            String listName) {
+//
+//        for (int i = 0; i < originalColumnNames.size(); i++) {
+//            TableColumn col = new TableColumn();
+//            col.setTable(savedTable);
+//            col.setInternalName(internalColumnNames.get(i));
+//            col.setDisplayName(originalColumnNames.get(i));
+//            col.setOriginalIndex(i);
+//            col.setListName(listName);
+//            tableColumnRepository.save(col);
+//        }
+//    }
 
-    /**
-     * Сохраняем метаданные таблицы
-     *
-     * @param originalColumnNames - имена столбцов в файле
-     * @param internalColumnNames - имена столбцов в БД
-     */
-    @Transactional
-    public void saveTableMetadata(
-            UploadedTable savedTable,
-            List<String> originalColumnNames,
-            List<String> internalColumnNames,
-            String listName) {
 
-        for (int i = 0; i < originalColumnNames.size(); i++) {
-            TableColumn col = new TableColumn();
-            col.setTable(savedTable);
-            col.setInternalName(internalColumnNames.get(i));
-            col.setDisplayName(originalColumnNames.get(i));
-            col.setOriginalIndex(i);
-            col.setListName(listName);
-            tableColumnRepository.save(col);
-        }
-    }
-
-    public void saveTableColumns(UploadedTable savedTable, List<String> originalColumnNames, List<String> internalColumnNames) {
-        // Сохраняем столбцы
-        for (int i = 0; i < originalColumnNames.size(); i++) {
-            TableColumn col = new TableColumn();
-            col.setTable(savedTable);
-            col.setInternalName(internalColumnNames.get(i));
-            col.setDisplayName(originalColumnNames.get(i));
-            col.setOriginalIndex(i);
-            tableColumnRepository.save(col);
-        }
-    }
-
-    public UploadedTable saveUploadedTable(String originalTableName, String internalTableName, String username) {
-        UploadedTable table = new UploadedTable();
+    public UploadedFileTable saveUploadedTable(String originalTableName, String internalTableName, String username) {
+        UploadedFileTable table = new UploadedFileTable();
         table.setInternalName(internalTableName);
         table.setDisplayName(originalTableName);
         table.setUsername(username);
@@ -65,27 +48,19 @@ public class MetadataService {
 
     //todo написать 2 метода - по имени таблицы и по id таблицы  и второй по колонкам
 
-    public UploadedTable getOriginalTableName(String internalTableName) {
+    public UploadedFileTable getOriginalTableName(String internalTableName) {
         return uploadedTableRepository.findByInternalName(internalTableName)
                 .orElseThrow(() -> new RuntimeException("Table not found: " + internalTableName));
     }
 
-    public String getOriginalColumnName(Long tableId, String internalColumnName) {
-        if (tableColumnRepository.existsByTableIdAndInternalName(tableId, internalColumnName)) {
-            return tableColumnRepository.findByTableIdAndInternalName(tableId, internalColumnName)
-                    .getDisplayName();
-        } else {
-            throw new RuntimeException("Column not found: " + internalColumnName);
-        }
 
-    }
 
-    public void saveTableList(UploadedTable savedTable, String tableName,String originalListName) {
-        TableList tableList = new TableList();
-        tableList.setListName(tableName);
-        tableList.setTable(savedTable);
-        tableList.setOriginalListName(originalListName);
-        tableListRepository.save(tableList);
-
+    public SheetTable saveSheetInTable(UploadedFileTable savedTable, String tableName, String originalListName) {
+        SheetTable sheetTable = new SheetTable();
+        sheetTable.setInternalListName(tableName);
+        sheetTable.setTable(savedTable);
+        sheetTable.setOriginalListName(originalListName);
+        sheetTableRepository.save(sheetTable);
+        return sheetTable;
     }
 }
