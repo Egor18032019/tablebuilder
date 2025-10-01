@@ -36,13 +36,19 @@ public class TableDataController {
     }
 
     /**
-     * Возвращает данные таблицы с оригинальными именами столбцов
+     * Возвращает данные таблицы
      * и фильтрация и сортировка.
      *
      * @param request - имя файла и параметры фильтрации и сортировки.
-     * @return
+     * @return - данные таблицы посредством фильтрации и сортировки.
      */
-    @Operation(summary = "Возвращает данные таблицы с оригинальными именами столбцов и фильтрация и сортировка")
+    @Operation(summary = "Фильтрация и сортировка данных таблицы. \n"
+            +"  Поддерживаемые операторы:\n" +
+            " contains — текст содержит подстроку (регистронезависимо)\n" +
+            " equals — точное совпадение\n" +
+            "  gt / lt / gte / lte — для чисел и дат\n" +
+            " between — диапазон (value → value2)"
+            )
     @PostMapping("/file-data")
     public ResponseEntity<FileDataResponse> getFileData(@RequestBody TableRequest request) {
 
@@ -54,7 +60,7 @@ public class TableDataController {
             return ResponseEntity.badRequest().build();
         }
     }
-
+    @Operation(summary = "Возвращает все значения в столбце")
     @PostMapping("/data/columns")
     public ResponseEntity<List<String>> getAllValueInColumn(@RequestBody RequestString request) {
         try {
