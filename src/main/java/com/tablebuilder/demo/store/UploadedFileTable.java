@@ -11,9 +11,9 @@ import java.time.LocalDateTime;
  * то есть имя файла Сотрудники.xlsx => sotrudniki
  */
 @Entity
-@Table(name = "uploaded_tables")
+@Table(name = "uploaded_files")
 @Data
-public class UploadedTable {
+public class UploadedFileTable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

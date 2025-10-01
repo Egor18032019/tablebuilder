@@ -7,6 +7,6 @@ import java.util.List;
 @Data
 public class SheetData {
     private String sheetName;        // "Продажи"
-    private List<String> columns;    // ["№", "ФИО", "Сумма"]
-    private List<List<String>> rows; // данные
+    private List<CellDTO> cellDTOList;    // ["№", "ФИО", "Сумма"]
+
 }

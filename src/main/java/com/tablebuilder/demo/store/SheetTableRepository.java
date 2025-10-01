@@ -6,6 +6,6 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface TableListRepository extends JpaRepository<TableList, Long> {
-    List<TableList> findByTableId(Long id);
+public interface SheetTableRepository extends JpaRepository<SheetTable, Long> {
+    List<SheetTable> findByTableId(Long id);
 }

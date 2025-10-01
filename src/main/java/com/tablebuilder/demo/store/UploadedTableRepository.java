@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface UploadedTableRepository extends JpaRepository<UploadedTable, Long> {
-    Optional<UploadedTable> findByInternalName(String internalName);
+public interface UploadedTableRepository extends JpaRepository<UploadedFileTable, Long> {
+    Optional<UploadedFileTable> findByInternalName(String internalName);
     boolean existsByInternalName(String internalName);
 
-    List<UploadedTable> findByDisplayNameStartingWith(String prefix);
+    List<UploadedFileTable> findByDisplayNameStartingWith(String prefix);
 
-    UploadedTable findByDisplayName(String displayName);
+    UploadedFileTable findByDisplayName(String displayName);
 }

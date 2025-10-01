@@ -31,7 +31,11 @@ spring:
     properties:
       hibernate:
         jdbc:
-          batch_size: 100
+          batch_size: 50
+          fetch_size: 50
+        order_inserts: true       # оптимизация INSERT
+        order_updates: true       # оптимизация UPDATE
+        batch_versioned_data: true
         connection:
           driver_class: org.postgresql.Driver
         dialect: org.hibernate.dialect.PostgreSQLDialect
