@@ -16,7 +16,7 @@ import lombok.Data;
         // Индекс для выборки всех ячеек листа (например, при экспорте)
         @Index(name = "idx_cell_sheet_id", columnList = "sheet_id"),
 
-        // Опционально: если часто фильтр  по типу данных
+        // Опционально:  фильтр  по типу данных
         // @Index(name = "idx_cell_data_type", columnList = "data_type")
 })
 public class TemplateCell {
@@ -30,7 +30,7 @@ public class TemplateCell {
     @Column(nullable = false)
 
     private String value;
-    @Column(nullable = false)
+    @Column(nullable = false, length = 10000)
     private Integer cellIndex;
     @Column(nullable = false)
     private Integer rowIndex;
@@ -38,10 +38,10 @@ public class TemplateCell {
     @Column(nullable = false)
     private CellDataType dataType;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 10000)
     private String formula;
-    @Column(nullable = false)
+    @Column(nullable = false, length = 10000)
     private String style;
-    @Column(nullable = false)
+    @Column(nullable = false, length = 10000)
     private String description;
 }
