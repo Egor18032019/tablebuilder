@@ -1,7 +1,7 @@
 package com.tablebuilder.demo.service;
 
 
-import com.tablebuilder.demo.model.CellDTO;
+import com.tablebuilder.demo.model.CellData;
 import com.tablebuilder.demo.model.ExcelImportResult;
 import com.tablebuilder.demo.store.SheetTable;
 import com.tablebuilder.demo.store.TemplateCell;
@@ -9,10 +9,13 @@ import com.tablebuilder.demo.store.TemplateCellRepository;
 import com.tablebuilder.demo.store.UploadedFileTable;
 import com.tablebuilder.demo.utils.CellDataType;
 import com.tablebuilder.demo.utils.NameUtils;
+
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFCellStyle;
 import org.apache.poi.xssf.usermodel.XSSFColor;
+import org.apache.poi.xssf.usermodel.XSSFFont;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -43,8 +46,6 @@ public class ExcelImportService {
             return new ExcelImportResult(false, 0, "", "Error: " + e.getMessage());
         }
     }
-
-    // --- Вспомогательные методы ---
 
     private void validateFile(MultipartFile file) {
         if (file == null || file.getOriginalFilename() == null) {
@@ -99,7 +100,7 @@ public class ExcelImportService {
     }
 
     private List<TemplateCell> processSheet(Sheet sheet, SheetTable sheetTable, Workbook workbook) {
-        List<TemplateCell> cells = new ArrayList<>();
+        List<TemplateCell> cellList = new ArrayList<>();
         int lastRowNum = sheet.getLastRowNum();
 
         for (int rowIndex = 0; rowIndex <= lastRowNum; rowIndex++) {
@@ -111,34 +112,33 @@ public class ExcelImportService {
                 Cell cell = row.getCell(cellIndex, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
                 if (cell == null || cell.getCellType() == CellType.BLANK) continue;
 
-                CellDTO cellData = getCellForSave(cell, workbook);
-                if (cellData == null) continue;
+                CellData cellData = getCellForSave(cell, workbook);
 
                 TemplateCell templateCell = buildTemplateCell(cellData, sheetTable, rowIndex, cellIndex);
-                cells.add(templateCell);
+                cellList.add(templateCell);
             }
         }
-        return cells;
+        return cellList;
     }
 
-    private TemplateCell buildTemplateCell(CellDTO cellData, SheetTable sheetTable,
+    private TemplateCell buildTemplateCell(CellData cellData, SheetTable sheetTable,
                                            int rowIndex, int cellIndex) {
         TemplateCell cell = new TemplateCell();
         cell.setSheet(sheetTable);
-        cell.setRowIndex(rowIndex);
-        cell.setCellIndex(cellIndex);
-        cell.setDataType(cellData.getDataType());
         cell.setValue(cellData.getValue());
+        cell.setCellIndex(cellIndex);
+        cell.setRowIndex(rowIndex);
+        cell.setDataType(cellData.getDataType());
         cell.setFormula(cellData.getFormula());
-        cell.setStyle(cellData.getStyle().toString());
+        cell.setStyle(cellData.getStyles());
         cell.setDescription(cellData.getDescription());
         return cell;
     }
 
     // --- Обработка стилей ячейки ---
 
-    private CellDTO getCellForSave(Cell cell, Workbook workbook) {
-        CellDTO cellData = new CellDTO();
+    private CellData getCellForSave(Cell cell, Workbook workbook) {
+        CellData cellData = new CellData();
         cellData.setFormula("");
 
         // Определяем тип данных и значение
@@ -146,7 +146,7 @@ public class ExcelImportService {
 
         // Собираем стили
         Map<String, Object> styles = extractCellStyles(cell, workbook);
-        cellData.setStyle(styles.toString());
+        cellData.setStyles(styles.toString());
 
         // Комментарий
         cellData.setDescription(getCellComment(cell));
@@ -154,7 +154,7 @@ public class ExcelImportService {
         return cellData;
     }
 
-    private void determineCellValueAndType(Cell cell, CellDTO cellData) {
+    private void determineCellValueAndType(Cell cell, CellData cellData) {
         switch (cell.getCellType()) {
             case BLANK -> {
                 // Пропускаем пустые ячейки
@@ -163,12 +163,16 @@ public class ExcelImportService {
                 cellData.setDataType(CellDataType.STRING);
                 cellData.setValue(cell.getStringCellValue());
             }
+//            case DATE -> {
+//                cellData.setDataType(CellDataType.STRING);
+//                cellData.setValue(cell.getStringCellValue());
+//            }
             case NUMERIC -> {
                 if (DateUtil.isCellDateFormatted(cell)) {
                     cellData.setDataType(CellDataType.DATE);
                     cellData.setValue(cell.getDateCellValue().toString());
                 } else {
-                    cellData.setDataType(CellDataType.NUMBER);
+                    cellData.setDataType(CellDataType.NUMERIC);
                     cellData.setValue(String.valueOf(cell.getNumericCellValue()));
                 }
             }
@@ -209,28 +213,67 @@ public class ExcelImportService {
         Map<String, Object> styles = new HashMap<>();
         CellStyle cellStyle = cell.getCellStyle();
         Font font = workbook.getFontAt(cellStyle.getFontIndex());
-
+        System.out.println(font);
         // Шрифт
         List<String> fontStyles = new ArrayList<>();
         if (font.getBold()) fontStyles.add("bold");
         if (font.getItalic()) fontStyles.add("italic");
         if (font.getStrikeout()) fontStyles.add("strikethrough");
         styles.put("font-styles", fontStyles.isEmpty() ? List.of("normal") : fontStyles);
-        styles.put("font-size", font.getFontHeightInPoints());
+        styles.put("font-size", font.getFontHeight());
         styles.put("font-color", extractFontColor(font));
-
+        styles.put("font-family", font.getFontName());
+        styles.put("font-height", font.getFontHeightInPoints());
         // Фон
         styles.put("background-color", extractBackgroundColor(cellStyle, workbook));
-
+        // Бордеры
+        if (cellStyle.getBorderTop() != BorderStyle.NONE) {
+            styles.put("border-top", cellStyle.getBorderTop().name().toLowerCase());
+            styles.put("border-color", cellStyle.getTopBorderColor());
+        }
+        if (cellStyle.getBorderLeft() != BorderStyle.NONE) {
+            styles.put("border-left", cellStyle.getBorderLeft().name().toLowerCase());
+            styles.put("border-color", cellStyle.getLeftBorderColor());
+        }
+        if (cellStyle.getBorderRight() != BorderStyle.NONE) {
+            styles.put("border-right", cellStyle.getBorderRight().name().toLowerCase());
+            styles.put("border-color", cellStyle.getRightBorderColor());
+        }
+        if (cellStyle.getBorderBottom() != BorderStyle.NONE) {
+            styles.put("border-bottom", cellStyle.getBorderBottom().name().toLowerCase());
+            styles.put("border-color", cellStyle.getBottomBorderColor());
+        }
         // Выравнивание
         styles.put("text-align", cellStyle.getAlignment().name().toLowerCase());
-
+        //размер столбца
+        Row row = cell.getRow();
+        if (row != null) {
+            styles.put("rowHeight", row.getHeightInPoints());
+            styles.put("line-height",  row.getHeightInPoints());
+        } else {
+            styles.put("rowHeight", 15.0f); // default
+            styles.put("line-height", 15.0f); // default
+        }
+        if (cellStyle.getWrapText()) {
+            styles.put("text-wrap", "wrap");
+        }
         return styles;
     }
 
     private String extractFontColor(Font font) {
-        // Для простоты — возвращаем индекс (можно улучшить до HEX)
-        return String.valueOf(font.getColor());
+        if (font instanceof XSSFFont) {
+            XSSFColor fontColor = ((XSSFFont) font).getXSSFColor();
+            if (fontColor != null && fontColor.getRGB() != null) {
+                byte[] rgb = fontColor.getRGB(); // [R, G, B]
+                String hex = String.format("#%02X%02X%02X",
+                        rgb[0] & 0xFF,
+                        rgb[1] & 0xFF,
+                        rgb[2] & 0xFF
+                );
+               return hex;
+            }
+        }
+        return "#000000";
     }
 
     private String extractBackgroundColor(CellStyle cellStyle, Workbook workbook) {
@@ -246,6 +289,7 @@ public class ExcelImportService {
                 );
             }
         }
+
         // Fallback: возвращаем индекс
         return String.valueOf(cellStyle.getFillBackgroundColor());
     }

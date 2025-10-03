@@ -2,6 +2,7 @@ package com.tablebuilder.demo.controllers;
 
 import com.tablebuilder.demo.model.ExcelImportResult;
 import com.tablebuilder.demo.service.ExcelImportService;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,7 +15,7 @@ public class ExcelUploadController {
     @Autowired
     private ExcelImportService excelImportService;
 
-    // Если надо, то передаём username в параметре или через аутентификацию
+    @Operation(summary = "Загрузка файла (в параметре можно указать имя пользователя)")
     @PostMapping("/upload")
     public ResponseEntity<ExcelImportResult> uploadExcel(
             @RequestParam("file") MultipartFile file,

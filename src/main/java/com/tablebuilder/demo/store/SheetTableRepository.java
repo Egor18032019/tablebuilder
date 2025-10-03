@@ -8,4 +8,5 @@ import java.util.List;
 @Repository
 public interface SheetTableRepository extends JpaRepository<SheetTable, Long> {
     List<SheetTable> findByTableId(Long id);
+
 }

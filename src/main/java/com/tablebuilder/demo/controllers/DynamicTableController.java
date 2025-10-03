@@ -25,11 +25,11 @@ public class DynamicTableController {
     public ResponseEntity<?> createTable(@RequestBody TableTemplateDTO template) {
         try {
             dynamicTableService.createTableFromTemplate(template);
-            return ResponseEntity.ok().body("Table '" + template.getName() + "' created successfully.");
+            return ResponseEntity.ok().body("File '" + template.getName() + "' saved successfully!");
         } catch (InvalidNameException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
-            return ResponseEntity.internalServerError().body("Failed to create table: " + e.getMessage());
+            return ResponseEntity.internalServerError().body("Failed to saved file: " + e.getMessage());
         }
     }
 }

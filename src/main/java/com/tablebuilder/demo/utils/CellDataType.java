@@ -1,5 +1,5 @@
 package com.tablebuilder.demo.utils;
 
 public enum CellDataType {
-    STRING, NUMBER, DATE, BOOLEAN, FORMULA, BLANK
+    STRING, NUMERIC, DATE, BOOLEAN, FORMULA, BLANK,ERROR
 }
