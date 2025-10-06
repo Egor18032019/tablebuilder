@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/table")
@@ -76,23 +77,22 @@ public class TableDataController {
      * @param sheetId      ID листа
      * @param columnIndex  Номер столбца (0-based)
      * @param filterValue  Значение для фильтрации
-     * @param operator     Оператор: equals, contains, gt, lt, gte, lte, between (опционально)
+     * @param operator     Оператор: equals, contains
      * @param filterValue2 Второе значение для between (опционально)
      */
     @Operation(summary = "Фильтрация строк листа по значению в определённом столбце. \n" +
             "Оператор: equals, contains, gt, lt, gte, lte, between (опционально)")
     @GetMapping("/sheet/{sheetId}/filter")
-    public ResponseEntity<List<CellData>> filterSheet(
+    public ResponseEntity<List< CellData>> filterSheet(
             @PathVariable Long sheetId,
             @RequestParam Integer columnIndex,
-            @RequestParam Integer rowIndex,
             @RequestParam String filterValue,
             @RequestParam(defaultValue = "equals") String operator,
             @RequestParam(required = false) String filterValue2) {
 
         try {
             List<CellData> filteredRows = excelExportService.filterByColumn(
-                    sheetId, columnIndex,rowIndex, filterValue, operator, filterValue2
+                    sheetId, columnIndex, filterValue, operator, filterValue2
             );
             return ResponseEntity.ok(filteredRows);
         } catch (Exception e) {

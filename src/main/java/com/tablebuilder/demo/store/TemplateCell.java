@@ -31,7 +31,7 @@ public class TemplateCell {
 
     private String value;
     @Column(nullable = false, length = 10000)
-    private Integer cellIndex;
+    private Integer columnIndex;
     @Column(nullable = false)
     private Integer rowIndex;
     @Enumerated(EnumType.STRING)

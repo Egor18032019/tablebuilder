@@ -4,6 +4,7 @@ import com.tablebuilder.demo.exception.InvalidNameException;
 import com.tablebuilder.demo.model.ColumnDefinitionDTO;
 import com.tablebuilder.demo.model.TableTemplateDTO;
 import com.tablebuilder.demo.utils.ColumnType;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -29,9 +30,10 @@ public class DynamicTableService {
      *
      * @param template
      */
+    @Operation(summary = "Реализовать - Создать таблицу из шаблона")
     @Transactional
     public void createTableFromTemplate(TableTemplateDTO template) {
-
+        System.out.println( " Реализуйте создание таблицы из шаблона " + template.getName() );
     }
 
 

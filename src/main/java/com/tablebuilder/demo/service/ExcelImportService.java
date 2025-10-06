@@ -126,7 +126,7 @@ public class ExcelImportService {
         TemplateCell cell = new TemplateCell();
         cell.setSheet(sheetTable);
         cell.setValue(cellData.getValue());
-        cell.setCellIndex(cellIndex);
+        cell.setColumnIndex(cellIndex);
         cell.setRowIndex(rowIndex);
         cell.setDataType(cellData.getDataType());
         cell.setFormula(cellData.getFormula());

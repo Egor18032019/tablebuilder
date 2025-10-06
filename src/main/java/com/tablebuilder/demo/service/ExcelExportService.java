@@ -50,7 +50,7 @@ public class ExcelExportService {
 
             List<TemplateCell> templateCells = cellRepository.findBySheetId(sheet.getId());
             List<CellData> cellDataList = templateCells.stream()
-                    .map(cell -> new CellData(cell.getValue(), cell.getCellIndex(), cell.getRowIndex(),
+                    .map(cell -> new CellData(cell.getValue(), cell.getColumnIndex(), cell.getRowIndex(),
                             cell.getDataType(), cell.getFormula(), cell.getStyle(), cell.getDescription()))
                     .toList();
             sheetData.setCellDataList(cellDataList);
@@ -105,11 +105,11 @@ public class ExcelExportService {
         Map<Integer, Map<Integer, TemplateCell>> cellMatrix = cells.stream()
                 .collect(Collectors.groupingBy(
                         TemplateCell::getRowIndex,
-                        Collectors.toMap(TemplateCell::getCellIndex, c -> c)
+                        Collectors.toMap(TemplateCell::getColumnIndex, c -> c)
                 ));
 
         int maxRow = cellMatrix.keySet().stream().max(Integer::compareTo).orElse(0);
-        int maxCol = cells.stream().mapToInt(TemplateCell::getCellIndex).max().orElse(0);
+        int maxCol = cells.stream().mapToInt(TemplateCell::getColumnIndex).max().orElse(0);
 
         // Ограничиваем имя листа до 31 символа (лимит Excel)
         String sheetName = sheet.getOriginalListName();
@@ -239,7 +239,7 @@ public class ExcelExportService {
 
     public TemplateCell updateCell(CellUpdateRequest request) {
         // Находим или создаём ячейку
-        TemplateCell cell = cellRepository.findBySheetIdAndRowIndexAndCellIndex(
+        TemplateCell cell = cellRepository.findBySheetIdAndRowIndexAndColumnIndex(
                 request.getSheetId(),
                 request.getRowIndex(),
                 request.getCellIndex()
@@ -249,7 +249,7 @@ public class ExcelExportService {
                     .orElseThrow(() -> new RuntimeException("Sheet not found"));
             newCell.setSheet(sheet);
             newCell.setRowIndex(request.getRowIndex());
-            newCell.setCellIndex(request.getCellIndex());
+            newCell.setColumnIndex(request.getCellIndex());
             return newCell;
         });
 
@@ -278,7 +278,7 @@ public class ExcelExportService {
                     TemplateCell cell = new TemplateCell();
                     cell.setSheet(sheet);
                     cell.setRowIndex(cellData.getRowIndex());
-                    cell.setCellIndex(cellData.getCellIndex());
+                    cell.setColumnIndex(cellData.getColumnIndex());
                     cell.setValue(cellData.getValue());
                     cell.setDataType(cellData.getDataType());
                     cell.setFormula(cellData.getFormula() != null ? cellData.getFormula() : "");
@@ -292,7 +292,7 @@ public class ExcelExportService {
         return sheet;
     }
 
-    public List<CellData> filterByColumn(Long sheetId, Integer columnIndex, Integer rowIndex, String filterValue,
+    public List<CellData> filterByColumn(Long sheetId, Integer columnIndex, String filterValue,
                                          String operator, String filterValue2) {
         // Получаем все ячейки листа
         List<TemplateCell> allCells = cellRepository.findBySheetId(sheetId);
@@ -301,11 +301,11 @@ public class ExcelExportService {
         Map<Integer, Map<Integer, TemplateCell>> rows = allCells.stream()
                 .collect(Collectors.groupingBy(
                         TemplateCell::getRowIndex,
-                        Collectors.toMap(TemplateCell::getCellIndex, c -> c)
+                        Collectors.toMap(TemplateCell::getColumnIndex, c -> c)
                 ));
 
         // Определяем максимальный индекс столбца
-        int maxCol = allCells.stream().mapToInt(TemplateCell::getCellIndex).max().orElse(0);
+        int maxCol = allCells.stream().mapToInt(TemplateCell::getColumnIndex).max().orElse(0);
 
         // Фильтруем строки, где значение в нужном столбце удовлетворяет условию
         List<CellData> result = new ArrayList<>();
@@ -315,14 +315,8 @@ public class ExcelExportService {
             TemplateCell cellInColumn = row.get(columnIndex);
 
             if (cellInColumn != null && matchesFilter(cellInColumn, filterValue, operator, filterValue2)) {
-                // Формируем строку целиком
-
-                for (int c = 0; c <= maxCol; c++) {
-                    TemplateCell cell = row.get(c);
-                    CellData cellData = new CellData(cell);
-
-                    result.add(cellData);
-                }
+                CellData cellData = new CellData(cellInColumn);
+                result.add(cellData);
 
             }
         }
@@ -366,11 +360,11 @@ public class ExcelExportService {
 
     private int compareNumbersOrDates(String value1, String value2, String dataType) {
         try {
-            if ("NUMBER".equals(dataType)) {
+            if (CellDataType.NUMERIC.name().equals(dataType)) {
                 BigDecimal num1 = new BigDecimal(value1);
                 BigDecimal num2 = new BigDecimal(value2);
                 return num1.compareTo(num2);
-            } else if ("DATE".equals(dataType)) {
+            } else if (CellDataType.DATE.name().equals(dataType)) {
                 LocalDate date1 = LocalDate.parse(value1);
                 LocalDate date2 = LocalDate.parse(value2);
                 return date1.compareTo(date2);

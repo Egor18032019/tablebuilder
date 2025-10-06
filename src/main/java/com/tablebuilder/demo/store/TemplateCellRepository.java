@@ -12,8 +12,8 @@ public interface TemplateCellRepository extends JpaRepository<TemplateCell, Long
     // Для поиска по строке:
     List<TemplateCell> findBySheetIdAndRowIndex(Long sheetId, Integer rowIndex);
     // Для обновления одной ячейки
-    Optional<TemplateCell> findBySheetIdAndRowIndexAndCellIndex(
-            Long sheetId, Integer rowIndex, Integer cellIndex
+    Optional<TemplateCell> findBySheetIdAndRowIndexAndColumnIndex(
+            Long sheetId, Integer rowIndex, Integer columnIndex
     );
 
     // Для удаления всех ячеек листа
