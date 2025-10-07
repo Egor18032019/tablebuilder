@@ -6,7 +6,7 @@ import lombok.Data;
 @Data
 public class CellUpdateRequest {
 
-    private Long sheetId;
+    private Long fileId;
     private String value;
     private Integer cellIndex;
     private Integer rowIndex;

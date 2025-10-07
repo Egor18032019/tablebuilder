@@ -5,9 +5,11 @@ import com.tablebuilder.demo.model.*;
 import com.tablebuilder.demo.service.ExcelExportService;
 import com.tablebuilder.demo.store.SheetTable;
 import com.tablebuilder.demo.store.TemplateCell;
+import com.tablebuilder.demo.utils.EndPointWebSocket;
 import io.swagger.v3.oas.annotations.Operation;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
@@ -15,9 +17,10 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/table")
+@AllArgsConstructor
 public class TableDataController {
+    private final SimpMessagingTemplate template;
 
-    @Autowired
     private ExcelExportService excelExportService;
 
     @Operation(summary = "Возвращает данные таблицы с оригинальными именами столбцов по имени файла - " +
@@ -48,6 +51,13 @@ public class TableDataController {
     public ResponseEntity<?> updateCell(@RequestBody CellUpdateRequest request) {
         try {
             TemplateCell cell = excelExportService.updateCell(request);
+            template.convertAndSendToUser(String.valueOf(request.getFileId()), //todo обдумать логику
+                    EndPointWebSocket.QUEUE_MESSAGE,
+                    cell);
+            template.convertAndSend(
+                    "/topic/file/" + request.getFileId(),
+                    cell
+            );
             return ResponseEntity.ok().body(cell.getId());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Error: " + e.getMessage());
@@ -76,23 +86,22 @@ public class TableDataController {
      * @param sheetId      ID листа
      * @param columnIndex  Номер столбца (0-based)
      * @param filterValue  Значение для фильтрации
-     * @param operator     Оператор: equals, contains, gt, lt, gte, lte, between (опционально)
+     * @param operator     Оператор: equals, contains
      * @param filterValue2 Второе значение для between (опционально)
      */
     @Operation(summary = "Фильтрация строк листа по значению в определённом столбце. \n" +
             "Оператор: equals, contains, gt, lt, gte, lte, between (опционально)")
     @GetMapping("/sheet/{sheetId}/filter")
-    public ResponseEntity<List<CellData>> filterSheet(
+    public ResponseEntity<List< CellData>> filterSheet(
             @PathVariable Long sheetId,
             @RequestParam Integer columnIndex,
-            @RequestParam Integer rowIndex,
             @RequestParam String filterValue,
             @RequestParam(defaultValue = "equals") String operator,
             @RequestParam(required = false) String filterValue2) {
 
         try {
             List<CellData> filteredRows = excelExportService.filterByColumn(
-                    sheetId, columnIndex,rowIndex, filterValue, operator, filterValue2
+                    sheetId, columnIndex, filterValue, operator, filterValue2
             );
             return ResponseEntity.ok(filteredRows);
         } catch (Exception e) {

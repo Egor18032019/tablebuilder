@@ -8,7 +8,7 @@ import com.tablebuilder.demo.utils.CellDataType;
 @lombok.AllArgsConstructor
 public class CellData {
     String value;
-    Integer cellIndex;
+    Integer columnIndex;
     Integer rowIndex;
     CellDataType dataType;
     String formula;
@@ -17,7 +17,7 @@ public class CellData {
 
     public CellData( TemplateCell cell) {
         this.value = cell.getValue();
-        this.cellIndex = cell.getCellIndex();
+        this.columnIndex = cell.getColumnIndex();
         this.rowIndex = cell.getRowIndex();
         this.dataType = cell.getDataType();
         this.formula = cell.getFormula();

@@ -11,7 +11,7 @@ import lombok.Data;
 @Data
 @Table(name = "cell_data", indexes = {
         // Составной индекс для быстрой выборки всех ячеек листа по строкам и столбцам
-        @Index(name = "idx_cell_sheet_row_cell", columnList = "sheet_id, row_index, cell_index"),
+        @Index(name = "idx_cell_sheet_row_cell", columnList = "sheet_id, row_index, column_index"),
 
         // Индекс для выборки всех ячеек листа (например, при экспорте)
         @Index(name = "idx_cell_sheet_id", columnList = "sheet_id"),
@@ -31,7 +31,7 @@ public class TemplateCell {
 
     private String value;
     @Column(nullable = false, length = 10000)
-    private Integer cellIndex;
+    private Integer columnIndex;
     @Column(nullable = false)
     private Integer rowIndex;
     @Enumerated(EnumType.STRING)

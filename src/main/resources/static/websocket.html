@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test 1</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+</head>
+<body>
+<div>
+    <h3>WebSocket Test</h3>
+    <label for="fileId"></label>
+    <input type="text" id="fileId" placeholder="File ID" value="1">
+    <button onclick="connect()">Connect</button>
+    <button onclick="disconnect()">Disconnect</button>
+    <button onclick="testUpdateCell()">Test Update Cell</button>
+    <div id="status" style="color: blue;">Status: Disconnected</div>
+    <div id="messages" style="border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: scroll;"></div>
+</div>
+
+<script>
+    let stompClient = null;
+
+    function connect() {
+        const fileId = document.getElementById('fileId').value;
+
+        const socket = new SockJS('http://127.0.0.1:8080/ws-chat');
+        stompClient = Stomp.over(socket);
+
+        // Включаем отладку
+        stompClient.debug = function(str) {
+            console.log('STOMP: ' + str);
+        };
+
+        stompClient.connect({}, function(frame) {
+            console.log(' Connected: ' + frame);
+            document.getElementById('status').textContent = 'Status: Connected to file ' + fileId;
+            document.getElementById('status').style.color = 'green';
+
+            // Подписываемся на обновления для конкретного файла
+            stompClient.subscribe('/topic/file/' + fileId, function(message) {
+                console.log('  Received message:', message);
+                showMessage('RECEIVED: ' + message.body);
+
+                // Парсим JSON
+                try {
+                    const cell = JSON.parse(message.body);
+                    showMessage('Parsed cell: ' + cell.id + ' = ' + cell.value);
+                } catch (e) {
+                    console.error('Error parsing JSON:', e);
+                }
+            });
+
+            // Дополнительная подписка для отладки
+            stompClient.subscribe('/topic/cell-updates', function(message) {
+                console.log('  Received broadcast:', message);
+                showMessage('BROADCAST: ' + message.body);
+            });
+
+        }, function(error) {
+            console.log(' Connection error:', error);
+            document.getElementById('status').textContent = 'Status: Error - ' + error;
+            document.getElementById('status').style.color = 'red';
+        });
+    }
+
+    function disconnect() {
+        if (stompClient !== null) {
+            stompClient.disconnect();
+        }
+        document.getElementById('status').textContent = 'Status: Disconnected';
+        document.getElementById('status').style.color = 'blue';
+        showMessage('Disconnected');
+    }
+
+    function testUpdateCell() {
+        const fileId = document.getElementById('fileId').value;
+
+        // Отправляем HTTP PUT запрос для обновления ячейки
+        fetch('/api/table/cell', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                fileId: fileId,
+
+                cellId: 'test-cell-' + Date.now(),
+                value: 'Test Value ' + new Date().toLocaleTimeString()
+            })
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.text();
+        })
+        .then(data => {
+            console.log('Cell update response:', data);
+            showMessage('HTTP Response: ' + data);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showMessage('Error: ' + error);
+        });
+    }
+
+    function showMessage(message) {
+        const messagesDiv = document.getElementById('messages');
+        const messageElement = document.createElement('div');
+        messageElement.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
+        messagesDiv.appendChild(messageElement);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // Автоподключение при загрузке
+    window.onload = function() {
+        // connect();
+    };
+</script>
+</body>
+</html>
