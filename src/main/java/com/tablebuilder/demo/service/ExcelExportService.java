@@ -240,12 +240,12 @@ public class ExcelExportService {
     public TemplateCell updateCell(CellUpdateRequest request) {
         // Находим или создаём ячейку
         TemplateCell cell = cellRepository.findBySheetIdAndRowIndexAndColumnIndex(
-                request.getSheetId(),
+                request.getFileId(),
                 request.getRowIndex(),
                 request.getCellIndex()
         ).orElseGet(() -> {
             TemplateCell newCell = new TemplateCell();
-            SheetTable sheet = sheetRepository.findById(request.getSheetId())
+            SheetTable sheet = sheetRepository.findById(request.getFileId())
                     .orElseThrow(() -> new RuntimeException("Sheet not found"));
             newCell.setSheet(sheet);
             newCell.setRowIndex(request.getRowIndex());

@@ -5,20 +5,22 @@ import com.tablebuilder.demo.model.*;
 import com.tablebuilder.demo.service.ExcelExportService;
 import com.tablebuilder.demo.store.SheetTable;
 import com.tablebuilder.demo.store.TemplateCell;
+import com.tablebuilder.demo.utils.EndPointWebSocket;
 import io.swagger.v3.oas.annotations.Operation;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/table")
+@AllArgsConstructor
 public class TableDataController {
+    private final SimpMessagingTemplate template;
 
-    @Autowired
     private ExcelExportService excelExportService;
 
     @Operation(summary = "Возвращает данные таблицы с оригинальными именами столбцов по имени файла - " +
@@ -49,6 +51,13 @@ public class TableDataController {
     public ResponseEntity<?> updateCell(@RequestBody CellUpdateRequest request) {
         try {
             TemplateCell cell = excelExportService.updateCell(request);
+            template.convertAndSendToUser(String.valueOf(request.getFileId()), //todo обдумать логику
+                    EndPointWebSocket.QUEUE_MESSAGE,
+                    cell);
+            template.convertAndSend(
+                    "/topic/file/" + request.getFileId(),
+                    cell
+            );
             return ResponseEntity.ok().body(cell.getId());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Error: " + e.getMessage());
